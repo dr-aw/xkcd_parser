@@ -34,6 +34,7 @@ func parseComics(num int, wg *sync.WaitGroup, comicsChan chan<- *Comics, errChan
 	comicsChan <- &result
 }
 
+// This func handles data from parseComics and saves data to .json
 func SaveToFile() error {
 	file, err := os.Create("comics.json")
 	if err != nil {
@@ -72,6 +73,7 @@ func SaveToFile() error {
 		}
 	}()
 
+	// Error channel
 	go func() {
 		for err := range errChan {
 			log.Printf("Comics parsing error: %v", err)
@@ -86,10 +88,12 @@ func SaveToFile() error {
 	close(comicsChan)
 	close(errChan)
 
+	// Time counting
 	ended := time.Now()
 	duration := ended.Sub(started)
 	fmt.Printf("Parsed %d comics in %.2f sec.\n", count, duration.Seconds())
 
+	// Writing data
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 	err = enc.Encode(comics)
