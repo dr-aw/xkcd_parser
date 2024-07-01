@@ -7,23 +7,30 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
-func parseComics(num int) (*Comics, error) {
+func parseComics(num int, wg *sync.WaitGroup, comicsChan chan<- *Comics, errChan chan<- error) {
+	defer wg.Done()
+
 	resp, err := http.Get(XkcdLink + strconv.Itoa(num) + "/info.0.json")
 	if err != nil {
-		return nil, err
+		errChan <- err
+		return
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Request error: %s", resp.Status)
+		errChan <- fmt.Errorf("Request error: %s", resp.Status)
+		return
 	}
+
 	var result Comics
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+		errChan <- err
 	}
-	return &result, nil
+	comicsChan <- &result
 }
 
 func SaveToFile() error {
@@ -38,22 +45,43 @@ func SaveToFile() error {
 	count, errCount := 0, 0
 	started := time.Now()
 	fmt.Printf("Starting parsing... (%.19v)\n", started)
-	for i := 1; ; i++ {
-		result, err := parseComics(i)
-		if err != nil {
-			log.Printf("Comics parsing error %d: %v", i, err)
+
+	// Channels
+	comicsChan := make(chan *Comics)
+	errChan := make(chan error)
+	wg := sync.WaitGroup{}
+	mutex := sync.Mutex{}
+
+	for i := 1; i < 10; i++ {
+		wg.Add(1)
+		go parseComics(i, &wg, comicsChan, errChan)
+	}
+
+	go func() {
+		for comic := range comicsChan {
+			mutex.Lock()
+			comics = append(comics, comic)
+		}
+	}()
+
+	go func() {
+		for err := range errChan {
+			log.Printf("Comics parsing error: %v", err)
 			errCount++
 			if errCount > 2 {
-				ended := time.Now()
-				duration := ended.Sub(started)
-				fmt.Printf("Parsed %d comics in %.2f sec.\n", count, duration.Seconds())
+				close(comicsChan)
+				close(errChan)
 				break
 			}
 		}
-		comics = append(comics, result)
-		count++
+	}()
 
-	}
+	wg.Wait()
+
+	ended := time.Now()
+	duration := ended.Sub(started)
+	fmt.Printf("Parsed %d comics in %.2f sec.\n", count, duration.Seconds())
+
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 	err = enc.Encode(comics)
