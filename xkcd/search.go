@@ -29,6 +29,7 @@ func parseComics(num int, wg *sync.WaitGroup, comicsChan chan<- *Comics, errChan
 	var result Comics
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		errChan <- err
+		return
 	}
 	comicsChan <- &result
 }
@@ -52,15 +53,22 @@ func SaveToFile() error {
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 
-	for i := 1; i < 10; i++ {
+	for i := 1; i < 100; i++ {
+		if i == 404 {
+			continue
+		}
 		wg.Add(1)
 		go parseComics(i, &wg, comicsChan, errChan)
 	}
 
+	// This func appends data from comicsChan to comics slice
 	go func() {
 		for comic := range comicsChan {
 			mutex.Lock()
 			comics = append(comics, comic)
+			count++
+			mutex.Unlock()
+			//fmt.Printf("comics = %v + %v\n", comics, comic)
 		}
 	}()
 
@@ -68,15 +76,15 @@ func SaveToFile() error {
 		for err := range errChan {
 			log.Printf("Comics parsing error: %v", err)
 			errCount++
-			if errCount > 2 {
-				close(comicsChan)
-				close(errChan)
+			if errCount > 1 {
 				break
 			}
 		}
 	}()
 
 	wg.Wait()
+	close(comicsChan)
+	close(errChan)
 
 	ended := time.Now()
 	duration := ended.Sub(started)
