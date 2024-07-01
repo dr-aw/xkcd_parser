@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"gopher/xkcd"
 	"os"
+	"xkcd_parser/xkcd"
 )
 
 var flagP = flag.Bool("p", false, "Parses xkcd.com to comics.json")
