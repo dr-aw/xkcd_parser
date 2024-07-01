@@ -26,28 +26,6 @@ func parseComics(num int) (*Comics, error) {
 	return &result, nil
 }
 
-//func mapComics() map[*Comics]int {
-//	started := time.Now()
-//	comics := make(map[*Comics]int)
-//	for i := 1; i < 100; i++ {
-//		result, err := parseComics(i)
-//		if err != nil {
-//			log.Printf("Comics parsing error %d: %v", i, err)
-//			continue // Skip and go next
-//		}
-//
-//		if result == nil {
-//			log.Printf("Nil result for comic %d", i)
-//			continue
-//		}
-//		comics[result] = result.Num
-//	}
-//	ended := time.Now()
-//	duration := ended.Sub(started)
-//	fmt.Printf("Парсинг завершён за %.4f сек\n", duration.Seconds())
-//	return comics
-//}
-
 func SaveToFile() error {
 	file, err := os.Create("comics.json")
 	if err != nil {
@@ -57,29 +35,24 @@ func SaveToFile() error {
 	defer file.Close()
 
 	var comics []*Comics
-	errCount := 0
-	fmt.Println("Starting parsing...")
+	count, errCount := 0, 0
 	started := time.Now()
+	fmt.Printf("Starting parsing... (%.19v)\n", started)
 	for i := 1; ; i++ {
 		result, err := parseComics(i)
 		if err != nil {
 			log.Printf("Comics parsing error %d: %v", i, err)
 			errCount++
-			continue // Skip and go next
+			if errCount > 2 {
+				ended := time.Now()
+				duration := ended.Sub(started)
+				fmt.Printf("Parsed %d comics in %.2f sec.\n", count, duration.Seconds())
+				break
+			}
 		}
-
-		//if result == nil {
-		//	log.Printf("Nil result for comic %d", i)
-		//	errCount++
-		//	continue
-		//}
 		comics = append(comics, result)
-		ended := time.Now()
-		duration := ended.Sub(started)
-		if errCount > 2 {
-			fmt.Printf("Parsed %d comics in %.4f sec.\n", i-3, duration.Seconds())
-			break
-		}
+		count++
+
 	}
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
